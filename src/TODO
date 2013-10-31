@@ -1,0 +1,22 @@
+Shell形式的内存控制方式
+1.先挂着cgroup,有两种方式 
+1)configparser -l /etc/cgconfig.conf 
+2)mount -t cgroup -o memory name mount_path_name
+2.创建cgroup,cgcreate -g memory:cgroup_name
+3.设置内存限制,cgset -r key=val cgroup_name
+4.启动测试程序 cgexec -g memory:cgroup_name bin_name
+
+API形式的内存控制器
+cgroup_config_load_config 以api形式挂在cgroup文件系统,参数为/etc/cgconfig.conf形式
+
+cgroup_new_cgroup 分配内存
+cgroup_add_controller 添加子系统
+cgroup_create_cgroup 创建cgroup
+
+create_cgroup_from_name_value_pairs 通过kv对创建cgroup
+cgroup_new_cgroup
+cgroup_copy_cgroup 值从源copy到目标
+cgroup_modify_cgroup 基于新值修改cgroup
+
+cgroup_change_cgroup_path
+
