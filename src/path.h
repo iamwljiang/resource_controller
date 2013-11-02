@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "strings.hpp"
+#include "strings.h"
 
 namespace path {
 

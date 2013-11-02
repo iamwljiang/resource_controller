@@ -1,17 +1,20 @@
-CFLAGS = -Wall -g
+CFLAGS = -g
 INC= -I.
-LIB = -L.
+LIB= -L.
 
 CFLAGS += $(INC) $(LIB)
 CXX=g++
 
-SRCS=$(wildcard %.cpp)
+SRCS=$(wildcard *.cpp)
 OBJS=$(patsubst %.cpp,%.o, $(SRCS))
 TARGET=TestCgroup
+
 .cpp.o:
-    $(CXX) $(CFLAGS) -c $<
+	$(CXX) $(CFLAGS) -c $<
 
 $(TARGET):$(OBJS)
-    $(CXX) $(CLFAGS) -o $@ $< -lcgconfig -lpthread
+	$(CXX) $(CLFAGS) $^ -o $@ -lpthread
 
 .PHONY:build
+clean:
+	rm -rf $(OBJS)

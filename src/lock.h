@@ -16,40 +16,30 @@
  * limitations under the License.
  */
 
-#include "lock.h"
+#ifndef __LOCK_HPP__
+#define __LOCK_HPP__
+
+#include <pthread.h>
 
 namespace mesos {
 namespace internal {
 
-Lock::Lock(pthread_mutex_t* _mutex)
-  : mutex(_mutex), locked(false)
+// RAII class for locking pthread_mutexes.
+class Lock
 {
-  lock();
-}
+public:
+  Lock(pthread_mutex_t* _mutex);
+  ~Lock();
 
+  void lock();
+  void unlock();
 
-void Lock::lock()
-{
-  if (!locked) {
-    pthread_mutex_lock(mutex);
-    locked = true;
-  }
-}
-
-
-void Lock::unlock()
-{
-  if (locked) {
-    pthread_mutex_unlock(mutex);
-    locked = false;
-  }
-}
-
-
-Lock::~Lock()
-{
-  unlock();
-}
+private:
+  pthread_mutex_t* mutex;
+  bool locked;
+};
 
 } // namespace internal {
 } // namespace mesos {
+
+#endif // __LOCK_HPP__

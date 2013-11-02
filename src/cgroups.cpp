@@ -1,4 +1,10 @@
 #include "cgroups.h"
+#include "os.h"
+#include "path.h"
+#include "strings.h"
+#include "proc.h"
+#include <fstream>
+#include <assert.h>
 
 namespace cgroups{
 namespace internel{
@@ -10,7 +16,7 @@ std::map<std::string,SubsystemInfo> subsystems()
     //找出文件中的记录
     std::ifstream in("/proc/cgroup");
     if(!in.is_open()){
-        return results;
+        return infos;
     }
 
     while(!in.eof()){
@@ -20,8 +26,8 @@ std::map<std::string,SubsystemInfo> subsystems()
         //流出现错误且不是位于文件尾则关闭文件返回
         if(in.fail()){
             if(!in.eof()){
-                file.close();
-                return results;
+                in.close();
+                return infos;
             }
         }else{
             if(line.empty()){
@@ -38,8 +44,8 @@ std::map<std::string,SubsystemInfo> subsystems()
 
                 //如果解析出错,则返回
                 if(ss.fail() && !ss.eof()){
-                    file.close();
-                    return results;
+                    in.close();
+                    return infos;
                 }
 
                 infos[name] = SubsystemInfo(name,hierarchy,cgroups,enabled);
@@ -51,13 +57,13 @@ std::map<std::string,SubsystemInfo> subsystems()
 }
 
 //挂载需要层级不存在,子系统可用,且不没有附加到某个层级中
-int mount(const string& hierarchy, const string& subsystems)
+int mount(const std::string& hierarchy, const std::string& subsystems)
 {
     if(os::exists(hierarchy)){
         return -1;
     }
 
-    std::vector<std::string> subsystems_items = os::tokenize(subsystems, ",");
+    std::vector<std::string> subsystems_items = strings::tokenize(subsystems, ",");
     size_t i = 0;
     size_t n = subsystems_items.size();
     for(; i < n; ++i){
@@ -75,18 +81,18 @@ int mount(const string& hierarchy, const string& subsystems)
         return -1;
     }
 
-    int ret = ::mount(subsystem.c_str(),hierarchy.c_str(),"cgroup",0,subsystem.c_str());
+    int ret = ::mount(subsystems.c_str(),hierarchy.c_str(),"cgroup",0,subsystems.c_str());
     return ret;
 }
 
 int unmount(const std::string& target,int flag = 0)
 {
-    return ::unmount(target.c_str(),flag);
+    return ::umount2(target.c_str(),flag);
 }
 
-static int remove(const string& hierarchy, const string& cgroup)
+static int remove(const std::string& hierarchy, const std::string& cgroup)
 {
-  string path = path::join(hierarchy, cgroup);
+	std::string path = path::join(hierarchy, cgroup);
 
   // Do NOT recursively remove cgroups.
   bool rmdir = os::rmdir(path, false);
@@ -128,12 +134,12 @@ static std::string read(
 }
 
 static int write(
-    const string& hierarchy,
-    const string& cgroup,
-    const string& control,
-    const string& value)
+    const std::string& hierarchy,
+    const std::string& cgroup,
+    const std::string& control,
+    const std::string& value)
 {
-  string path = path::join(hierarchy, cgroup, control);
+  std::string path = path::join(hierarchy, cgroup, control);
   std::ofstream file(path.c_str());
 
   if (!file.is_open()) {
@@ -159,7 +165,7 @@ static int write(
 
 
 //验证某个层级是否挂载,cgroup是否存在,控制文件是否存在
-static bool verify(const string& hierarchy,const string& cgroup = "",const string& control = "")
+static bool verify(const std::string& hierarchy,const std::string& cgroup = "",const std::string& control = "")
 {
     bool mounted = cgroups::mounted(hierarchy);
     if(!mounted){
@@ -171,7 +177,7 @@ static bool verify(const string& hierarchy,const string& cgroup = "",const strin
         cgroup_path = path::join(hierarchy,cgroup);
 
         if(!os::exists(cgroup_path)){
-            return false
+            return false;
         }
     }
 
@@ -189,7 +195,7 @@ static bool verify(const string& hierarchy,const string& cgroup = "",const strin
 
 bool enabled()
 {
-    return os::exist("/proc/cgroup");
+    return os::exists("/proc/cgroup");
 }
 
 int hierarchies(std::set<std::string>& results)
@@ -209,8 +215,9 @@ int hierarchies(std::set<std::string>& results)
                 delete table,table = NULL;
                 return -1;
             }
-        }
-        results.insert(realpath);
+        
+            results.insert(realpath);
+		}
     }
 
     delete table,table = NULL;
@@ -225,10 +232,10 @@ std::string hierarchy(const std::string& subsystems)
         return hierarchy;
     }
 
-    size_t n = result.size();
-    size_t i = 0;
-    for(; i < n; ++i){
-        std::string& candidate = result.at(i);
+	std::set<std::string>::iterator iter,end;
+	end = result.end();
+    for(iter = result.begin(); iter != end; ++iter){
+        std::string candidate = *iter;
         //如果没有子系统要查,则返回第一个层级
         if(subsystems.empty()){
             hierarchy = candidate;
@@ -265,7 +272,7 @@ bool mounted(const std::string& hierarchy, const std::string& subsystems)
     if(attached.empty())
         return false;
 
-    std::vector<std::string> subsystems_items = tokenize(subsystems,",");
+    std::vector<std::string> subsystems_items = strings::tokenize(subsystems,",");
     size_t n = subsystems_items.size();
     size_t i = 0;
     for(; i < n; ++i){
@@ -340,10 +347,10 @@ std::set<std::string>  subsystems(const std::string& hierarchy)
     }
 
     //如果子系统在mount的选项中出现,则说明这个子系统是在hierarchy下
-    n = names.size();
-    i = 0;
-    for(; i < n; ++n){
-        std::string& name = names.at(i);
+	std::set<std::string>::iterator iter,end;
+	end = names.end();
+	for(iter = names.begin(); iter != end; ++iter){
+        const std::string& name = *iter;
         if(hierarchyEntry.hasOption(name)){
             results.insert(name);
         }
@@ -360,11 +367,11 @@ bool busy(const std::string& subsystems)
     }
 
     bool busy = false;
-    std::map<std::string,SubsystemInfo> end;
+    std::map<std::string,SubsystemInfo>::iterator end;
     end = infos.end();
 
     //查找子系统是否在所有子系统列表中出现
-    std::vector<std::string> subsystems_items = os::tokenize(subsystems,",");
+    std::vector<std::string> subsystems_items = strings::tokenize(subsystems,",");
     size_t n = subsystems_items.size();
     size_t i = 0;
     for(; i < n; ++i){
@@ -386,7 +393,7 @@ bool enabled(const std::string& subsystems)
     std::map<std::string,SubsystemInfo> infos = internel::subsystems();
     bool disable = false;
 
-    std::vector<std::string> subsystems_items = os::tokenize(subsystems,",");
+    std::vector<std::string> subsystems_items = strings::tokenize(subsystems,",");
     size_t n = subsystems_items.size();
     size_t i = 0;
 
@@ -437,15 +444,15 @@ int remove(const std::string& hierarchy, const std::string& cgroup)
     return -1;
   }
 
-  std::vector<std::string> > cgroups = cgroups::get(hierarchy, cgroup);
+  std::vector<std::string > cgroups = cgroups::get(hierarchy, cgroup);
   if (!cgroups.empty()) {
     return -1;
   }
 
-  return internal::remove(hierarchy, cgroup);
+  return internel::remove(hierarchy, cgroup);
 }
 
-std::vector<std::string> get(const std::string& hierarchy, const std::string& cgroup = "/")
+std::vector<std::string> get(const std::string& hierarchy, const std::string& cgroup )
 {
     std::vector<std::string> cgroups;
     bool error = verify(hierarchy, cgroup);
@@ -463,14 +470,13 @@ std::vector<std::string> get(const std::string& hierarchy, const std::string& cg
     return cgroups;
     }
 
-    char* paths[] = { const_cast<char*>(destAbsPath.get().c_str()), NULL };
+    char* paths[] = { const_cast<char*>(destAbsPath.c_str()), NULL };
 
     FTS* tree = fts_open(paths, FTS_NOCHDIR, NULL);
     if (tree == NULL) {
     return cgroups;
     }
 
-    std::vector<std::string> cgroups;
 
     //在指定cgroup下是否还有目录,也就是是否还有控制族群
     FTSENT* node;
@@ -481,7 +487,7 @@ std::vector<std::string> get(const std::string& hierarchy, const std::string& cg
     // FTS_DP indicates a directory being visited in postorder.
     if (node->fts_level > 0 && node->fts_info & FTS_DP) {
         //hierarchyAbsPath.get().length()??
-      std::string path = strings::trim(node->fts_path + hierarchyAbsPath.get().length(), "/");
+      std::string path = strings::trim(node->fts_path + hierarchyAbsPath.length(), "/");
       cgroups.push_back(path);
     }
     }
@@ -514,7 +520,7 @@ std::string read(const std::string& hierarchy,const std::string& cgroup,const st
     return false;
   }
 
-  return internal::read(hierarchy, cgroup, control);
+  return internel::read(hierarchy, cgroup, control);
 }
 
 int write(const std::string& hierarchy,const std::string& cgroup,const std::string& control,const std::string& value)
@@ -524,19 +530,19 @@ int write(const std::string& hierarchy,const std::string& cgroup,const std::stri
     return -1;
   }
 
-  return internal::write(hierarchy, cgroup, control, value);
+  return internel::write(hierarchy, cgroup, control, value);
 }
 
 std::set<pid_t> tasks(const std::string& hierarchy, const std::string& cgroup)
 {
+  std::set<pid_t> pids;
   std::string value = cgroups::read(hierarchy, cgroup, "tasks");
   if ("") {
-    return Error("Failed to read cgroups control 'tasks': " + value.error());
+    return pids;
   }
 
   // Parse the value read from the control file.
-  std::set<pid_t> pids;
-  std::istringstream ss(value.get());
+  std::istringstream ss(value);
   ss >> std::dec;
   while (!ss.eof()) {
     pid_t pid;
@@ -544,7 +550,7 @@ std::set<pid_t> tasks(const std::string& hierarchy, const std::string& cgroup)
 
     if (ss.fail()) {
       if (!ss.eof()) {
-        return Error("Failed to parse '" + value.get() + "'");
+        return pids;
       }
     } else {
       pids.insert(pid);
@@ -566,7 +572,7 @@ bool cleanup(const std::string& hierarchy)
   bool mounted = cgroups::mounted(hierarchy);
   if (!mounted) {
     if (os::exists(hierarchy)) {
-      bool ret rmdir = os::rmdir(hierarchy);
+      bool ret = os::rmdir(hierarchy);
       if (!ret) {
         return false;
       }

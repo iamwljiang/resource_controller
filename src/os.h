@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 #ifdef __linux__
 #include <linux/version.h>
@@ -36,8 +37,9 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <iostream>
 
-#include "path.hpp"
+#include "path.h"
 
 #include "strings.h"
 
@@ -455,13 +457,13 @@ inline bool rmdir(const std::string& directory, bool recursive = true)
       switch (node->fts_info) {
         case FTS_DP:
           if (::rmdir(node->fts_path) < 0 && errno != ENOENT) {
-            return ErrnoError();
+            return false;
           }
           break;
         case FTS_F:
         case FTS_SL:
           if (::unlink(node->fts_path) < 0 && errno != ENOENT) {
-            return ErrnoError();
+            return false;
           }
           break;
         default:
@@ -589,45 +591,6 @@ inline std::string getcwd()
   }
 
   return std::string();
-}
-
-
-// Return the list of file paths that match the given pattern by recursively
-// searching the given directory. A match is successful if the pattern is a
-// substring of the file name.
-// NOTE: Directory path should not end with '/'.
-// NOTE: Symbolic links are not followed.
-// TODO(vinod): Support regular expressions for pattern.
-// TODO(vinod): Consider using ftw or a non-recursive approach.
-inline Try<std::list<std::string> > find(
-    const std::string& directory,
-    const std::string& pattern)
-{
-  std::list<std::string> results;
-
-  if (!isdir(directory)) {
-    return Error("'" + directory + "' is not a directory");
-  }
-
-  foreach (const std::string& entry, ls(directory)) {
-    std::string path = path::join(directory, entry);
-    // If it's a directory, recurse.
-    if (isdir(path) && !islink(path)) {
-      Try<std::list<std::string> > matches = find(path, pattern);
-      if (matches.isError()) {
-        return matches;
-      }
-      foreach (const std::string& match, matches.get()) {
-        results.push_back(match);
-      }
-    } else {
-      if (entry.find(pattern) != std::string::npos) {
-        results.push_back(path); // Matched the file pattern!
-      }
-    }
-  }
-
-  return results;
 }
 
 

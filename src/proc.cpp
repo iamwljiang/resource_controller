@@ -19,12 +19,12 @@ MountTable* MountTable::read(const std::string& path)
     if(NULL == file) return NULL;
 
     MountTable* table = new MountTable;
-#if defined(_BSD_SOURCE || _SVID_SOURCE)
+#if defined(_BSD_SOURCE) || defined(_SVID_SOURCE)
     while(true){
         char str[PATH_MAX] = "";
         struct mntent mntbuf;
-        struct mntent *mnt = ::getmntent_r(file,&mntbuf,str,PATH_MAX);
-        if(NULL == mnt)
+        struct mntent *mntent = ::getmntent_r(file,&mntbuf,str,PATH_MAX);
+        if(NULL == mntent)
             break;
 
         MountTable::Entry entry(mntent->mnt_fsname,
@@ -39,6 +39,6 @@ MountTable* MountTable::read(const std::string& path)
     return NULL;
 #endif
 
-    ::entmntent(file);
+    ::endmntent(file);
     return table;
 }

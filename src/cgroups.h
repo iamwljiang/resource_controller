@@ -8,7 +8,7 @@
 #include <map>
 #include <sys/types.h>
 
-namespace cgroup{
+namespace cgroups{
 
 //系统是否支持cgroup
 bool enabled();
@@ -29,7 +29,7 @@ int mount(const std::string& hierarchy, const std::string& subsystems, int retry
 //卸载层级并移除相关的目录
 int unmount(const std::string& hierarchy);
 //判断给定的根层级是被挂载到虚拟文件系统中,并且指定的子系统有附加在上面
-bool mounted(const std::string& hierarchy, const std::string& subsystems);
+bool mounted(const std::string& hierarchy, const std::string& subsystems="");
 //在某个层级下面创建控制控制族群
 int create(const std::string& hierarchy, const std::string& cgroup);
 //移除某个层级下的控制族群
@@ -55,6 +55,6 @@ std::map<std::string, uint64_t> stat(const std::string& hierarchy,const std::str
 //清除层级,先销毁所有相关的控制族群,卸载层级,删除挂载点
 bool cleanup(const std::string& hierarchy);
 
-} //namespace cgroup
+} //namespace cgroups
 
 #endif //__MEMORY_CONTROLLER_CGROUP_H__
