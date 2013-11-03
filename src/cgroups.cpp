@@ -14,7 +14,7 @@ std::map<std::string,SubsystemInfo> subsystems()
     std::map<std::string,SubsystemInfo> infos;
 
     //找出文件中的记录
-    std::ifstream in("/proc/cgroup");
+    std::ifstream in("/proc/cgroups");
     if(!in.is_open()){
         return infos;
     }
@@ -195,7 +195,7 @@ static bool verify(const std::string& hierarchy,const std::string& cgroup = "",c
 
 bool enabled()
 {
-    return os::exists("/proc/cgroup");
+    return os::exists("/proc/cgroups");
 }
 
 int hierarchies(std::set<std::string>& results)
@@ -385,7 +385,7 @@ bool busy(const std::string& subsystems)
         }
     }
 
-    return true;
+    return busy;
 }
 
 bool enabled(const std::string& subsystems)
@@ -404,11 +404,11 @@ bool enabled(const std::string& subsystems)
         }
 
         if(!infos[subsystem].enabled){
-            disable = false;
+            disable = true;
         }
     }
 
-    return disable;
+    return !disable;
 }
 
 int mount(const std::string& hierarchy, const std::string& subsystems, int retry)
