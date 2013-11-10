@@ -66,11 +66,6 @@ bool check_enabled(const std::string& sub)
 		return false;
 	}
 
-	if(cgroups::busy(sub)){
-		printf("subsystem:%s is busy\n",sub.c_str());
-		return false;
-	}
-
 	return true;
 }
 
@@ -152,8 +147,8 @@ bool sub_process_with_exec(int argc,char**argv)
 int main(int argc,char** argv)
 {
 	
-	//if(!check_enabled(sub))
-	//	return -1;
+	if(!check_enabled(sub))
+		return -1;
 
 	//if hierarchy mounted,umount it
 	if(cgroups::mounted(mount_path,sub)){
