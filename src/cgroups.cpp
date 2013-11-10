@@ -5,6 +5,8 @@
 #include "proc.h"
 #include <fstream>
 #include <assert.h>
+#include <errno.h>
+#include <stdlib.h>
 
 namespace cgroups{
 namespace internel{
@@ -140,16 +142,16 @@ static int write(
     const std::string& value)
 {
   std::string path = path::join(hierarchy, cgroup, control);
-  std::ofstream file(path.c_str());
+  std::ofstream file(path.c_str(),std::ios_base::out);
 
   if (!file.is_open()) {
     return -1;
   }
 
   file << value << std::endl;
-
   if (file.fail()) {
     // TODO(jieyu): Does std::ifstream actually set errno?
+    std::cerr << "write " << path << " " << value << " error:" << strerror(errno) << std::endl;
     file.close();
     return -1;
   }
@@ -158,6 +160,71 @@ static int write(
   return 0;
 }
 
+static bool cloneCpusetCpusMems(
+    const std::string& hierarchy,
+    const std::string& parentCgroup,
+    const std::string& childCgroup)
+{
+  std::string cpus = cgroups::read(hierarchy, parentCgroup, "cpuset.cpus");
+  if (cpus.empty()) {
+    std::cerr << "Failed to read control 'cpuset.cpus" << std::endl;
+    return false;
+  }
+
+  std::string mems = cgroups::read(hierarchy, parentCgroup, "cpuset.mems");
+  if (mems.empty()) {
+    std::cerr << "Failed to read control 'cpuset.mems'" << std::endl;
+    return false;
+  }
+
+  int wret =
+    cgroups::write(hierarchy, childCgroup, "cpuset.cpus", cpus);
+  if (wret != 0) {
+    std::cerr << "Failed to write control 'cpuset.cpus'" << std::endl;
+    return false;
+  }
+
+  wret = cgroups::write(hierarchy, childCgroup, "cpuset.mems", mems);
+  if (wret != 0) {
+    std::cerr << "Failed to write control 'cpuset.mems'" << std::endl;
+    return false;
+  }
+
+  return true;
+}
+
+static bool cloneMemory(
+    const std::string& hierarchy,
+    const std::string& parentCgroup,
+    const std::string& childCgroup)
+{
+  std::string cpus = cgroups::read(hierarchy, parentCgroup, "memory.limit_in_bytes");
+  if (cpus.empty()) {
+    std::cerr << "Failed to read control 'memory.limit_in_bytes'" << std::endl;
+    return false;
+  }
+
+  std::string tasks = cgroups::read(hierarchy, parentCgroup, "tasks");
+  if (cpus.empty()) {
+    std::cerr << "Failed to read control 'memory.limit_in_bytes'" << std::endl;
+    return false;
+  }
+/*
+  int wret =
+    cgroups::write(hierarchy, childCgroup, "memory.limit_in_bytes", cpus);
+  if (wret != 0) {
+    std::cerr << "Failed to write control 'memory.limit_in_bytes'" << std::endl;
+    return false;
+  }
+
+  wret = cgroups::write(hierarchy, childCgroup, "tasks", tasks);
+  if (wret != 0) {
+    std::cerr << "Failed to write control 'tasks'" << std::endl;
+    return false;
+  }
+*/
+  return true;
+}
 
 } //namespace internel
 
@@ -456,7 +523,7 @@ std::vector<std::string> get(const std::string& hierarchy, const std::string& cg
 {
     std::vector<std::string> cgroups;
     bool error = verify(hierarchy, cgroup);
-    if (error) {
+    if (!error) {
         return cgroups;
     }
 
@@ -517,7 +584,7 @@ std::string read(const std::string& hierarchy,const std::string& cgroup,const st
 {
   bool ret = verify(hierarchy, cgroup, control);
   if (!ret) {
-    return false;
+    return "";
   }
 
   return internel::read(hierarchy, cgroup, control);
@@ -599,7 +666,39 @@ bool cleanup(const std::string& hierarchy)
   return true;
 }
 
-int create(const std::string& hierarchy, const std::string& cgroup);
+int create(const std::string& hierarchy, const std::string& cgroup)
+{
+  if(!verify(hierarchy)){
+    return -1;
+  }
+
+  std::string path = path::join(hierarchy, cgroup);
+  if(!os::mkdir(path, false)){ // Do NOT create recursively.
+    std::cerr << "Failed to create directory '" + path + "': error";
+    return -1;
+  }
+
+  // Now clone 'cpuset.cpus' and 'cpuset.mems' if the 'cpuset'
+  // subsystem is attached to the hierarchy.
+  std::set<std::string> attached = cgroups::subsystems(hierarchy);
+  if (attached.empty()) {
+    return -1;
+  } else if (attached.count("memory") > 0) {
+    std::string parent = os::dirname(path::join("/", cgroup));
+    if (parent.empty()) {
+      return -1;
+    }
+    return internel::cloneMemory(hierarchy,parent,cgroup) ? 0 : -1;
+  }else if (attached.count("cpuset") > 0) {
+    std::string parent = os::dirname(path::join("/", cgroup));
+    if(parent.empty()){
+      return -1;
+    }
+    return internel::cloneCpusetCpusMems(hierarchy, parent, cgroup) ? 0 : -1;
+  }
+
+  return 0;
+}
 
 } //namespace cgroups
 
